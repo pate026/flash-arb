@@ -1,6 +1,6 @@
+
 cat << 'EOF' > .github/workflows/test.yml
 name: CI
-
 on:
   push:
   pull_request:
