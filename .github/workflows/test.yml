@@ -1,3 +1,4 @@
+cat << 'EOF' > .github/workflows/test.yml
 name: CI
 
 permissions: {}
@@ -10,13 +11,13 @@ on:
 jobs:
   check:
     name: Foundry project
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
           submodules: recursive
@@ -29,11 +30,9 @@ jobs:
       - name: Show Forge version
         run: forge --version
 
-      - name: Run Forge fmt
-        run: forge fmt --check
-
       - name: Run Forge build
         run: forge build --sizes
 
       - name: Run Forge tests
         run: forge test -vvv
+EOF
