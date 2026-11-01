@@ -1,8 +1,6 @@
 cat << 'EOF' > .github/workflows/test.yml
 name: CI
 
-permissions: {}
-
 on:
   push:
   pull_request:
@@ -17,7 +15,7 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
           submodules: recursive
@@ -36,3 +34,4 @@ jobs:
       - name: Run Forge tests
         run: forge test -vvv
 EOF
+
