@@ -40,22 +40,19 @@ interface ISwapRouterV3 {
         uint160 sqrtPriceLimitX96;
     }
 
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        payable
-        returns (uint256 amountOut);
+    function exactInputSingle(ExactInputSingleParams calldata params) external payable returns (uint256 amountOut);
 }
 
 contract FlashLoanArb is FlashLoanSimpleReceiverBase, Ownable {
     using SafeERC20 for IERC20;
 
     struct ArbParams {
-        address routerBuy;   // 1. jalka: asset -> tokenMid
-        address routerSell;  // 2. jalka: tokenMid -> asset (eri DEX tai eri fee-tier)
-        address tokenMid;    // valitoken, esim. WETH kun asset = USDC
-        uint24 feeBuy;       // poolin fee 1. jalassa (500 / 3000 / 10000)
-        uint24 feeSell;      // poolin fee 2. jalassa
-        uint256 minProfit;   // vahimmaisvoitto assetin yksikoissa, muuten revert
+        address routerBuy; // 1. jalka: asset -> tokenMid
+        address routerSell; // 2. jalka: tokenMid -> asset (eri DEX tai eri fee-tier)
+        address tokenMid; // valitoken, esim. WETH kun asset = USDC
+        uint24 feeBuy; // poolin fee 1. jalassa (500 / 3000 / 10000)
+        uint24 feeSell; // poolin fee 2. jalassa
+        uint256 minProfit; // vahimmaisvoitto assetin yksikoissa, muuten revert
     }
 
     event ArbExecuted(address indexed asset, uint256 amount, uint256 profit);
@@ -78,21 +75,16 @@ contract FlashLoanArb is FlashLoanSimpleReceiverBase, Ownable {
     {}
 
     /// Kaynnista arbitraasi. Vain omistaja voi kutsua.
-    function requestFlashLoan(address asset, uint256 amount, ArbParams calldata p)
-        external
-        onlyOwner
-    {
+    function requestFlashLoan(address asset, uint256 amount, ArbParams calldata p) external onlyOwner {
         POOL.flashLoanSimple(address(this), asset, amount, abi.encode(p), 0);
     }
 
     /// Aave-pool kutsuu tata lainan myontamisen jalkeen.
-    function executeOperation(
-        address asset,
-        uint256 amount,
-        uint256 premium,
-        address initiator,
-        bytes calldata params
-    ) external override returns (bool) {
+    function executeOperation(address asset, uint256 amount, uint256 premium, address initiator, bytes calldata params)
+        external
+        override
+        returns (bool)
+    {
         require(msg.sender == address(POOL), "kutsuja ei ole POOL");
         require(initiator == address(this), "vieras initiaattori");
 
@@ -118,27 +110,25 @@ contract FlashLoanArb is FlashLoanSimpleReceiverBase, Ownable {
         return true;
     }
 
-    function _swapExactIn(
-        address router,
-        address tokenIn,
-        address tokenOut,
-        uint24 fee,
-        uint256 amountIn
-    ) internal returns (uint256 amountOut) {
+    function _swapExactIn(address router, address tokenIn, address tokenOut, uint24 fee, uint256 amountIn)
+        internal
+        returns (uint256 amountOut)
+    {
         require(allowedRouters[router], "router ei sallittu");
         IERC20(tokenIn).forceApprove(router, amountIn);
-        amountOut = ISwapRouterV3(router).exactInputSingle(
-            ISwapRouterV3.ExactInputSingleParams({
-                tokenIn: tokenIn,
-                tokenOut: tokenOut,
-                fee: fee,
-                recipient: address(this),
-                deadline: block.timestamp,
-                amountIn: amountIn,
-                amountOutMinimum: 0, // lopullinen minProfit-require suojaa koko tx:n
-                sqrtPriceLimitX96: 0
-            })
-        );
+        amountOut = ISwapRouterV3(router)
+            .exactInputSingle(
+                ISwapRouterV3.ExactInputSingleParams({
+                    tokenIn: tokenIn,
+                    tokenOut: tokenOut,
+                    fee: fee,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: amountIn,
+                    amountOutMinimum: 0, // lopullinen minProfit-require suojaa koko tx:n
+                    sqrtPriceLimitX96: 0
+                })
+            );
     }
 
     /// Nosta kertyneet voitot (tai pelasta jumiin jaaneet tokenit).
@@ -148,7 +138,7 @@ contract FlashLoanArb is FlashLoanSimpleReceiverBase, Ownable {
     }
 
     function withdrawETH() external onlyOwner {
-        (bool ok, ) = owner().call{value: address(this).balance}("");
+        (bool ok,) = owner().call{value: address(this).balance}("");
         require(ok, "ETH-siirto epaonnistui");
     }
 

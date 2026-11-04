@@ -35,10 +35,7 @@ contract MockRouter {
         uint160 sqrtPriceLimitX96;
     }
 
-    function exactInputSingle(ExactInputSingleParams calldata params)
-        external
-        returns (uint256 amountOut)
-    {
+    function exactInputSingle(ExactInputSingleParams calldata params) external returns (uint256 amountOut) {
         uint256 r = rate[params.tokenIn][params.tokenOut];
         require(r > 0, "rate ei asetettu");
 
@@ -90,7 +87,7 @@ contract FlashLoanArbForcedProfitTest is Test {
         // USDC:lla on 6 desimaalia, joten 2020 USDC = 2020e6, skaalattu 1e18:
         // rate = 2020e6 * 1e18 / 1e18 (koska WETH:n amountIn on 18 desim.)
         // Selkeampi: amountOut = amountIn * rate / 1e18, missa amountIn on WETH (1e18-skaalaa)
-        // Haluamme: 1e18 WETH -> 2020e6 USDC, joten rate = 2020e6 * 1e18 / 1e18 = 2020e6... 
+        // Haluamme: 1e18 WETH -> 2020e6 USDC, joten rate = 2020e6 * 1e18 / 1e18 = 2020e6...
         // mutta rate pitaa skaalata niin etta amountOut tulee oikeassa yksikossa:
         // amountOut = amountIn(1e18) * rate / 1e18 = rate, jos haluamme rate=2020e6, amountIn=1e18
         mockRouter.setRate(WETH, USDC, 2020e6);

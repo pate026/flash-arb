@@ -22,12 +22,7 @@ contract FlashLoanArbForkTest is Test {
         uint256 loanAmount = 10_000e6;
 
         FlashLoanArb.ArbParams memory p = FlashLoanArb.ArbParams({
-            routerBuy: UNIV3_ROUTER,
-            routerSell: UNIV3_ROUTER,
-            tokenMid: WETH,
-            feeBuy: 500,
-            feeSell: 3000,
-            minProfit: 1
+            routerBuy: UNIV3_ROUTER, routerSell: UNIV3_ROUTER, tokenMid: WETH, feeBuy: 500, feeSell: 3000, minProfit: 1
         });
 
         try arb.requestFlashLoan(USDC, loanAmount, p) {
@@ -42,12 +37,7 @@ contract FlashLoanArbForkTest is Test {
 
     function test_onlyOwner_canRequest() public {
         FlashLoanArb.ArbParams memory p = FlashLoanArb.ArbParams({
-            routerBuy: UNIV3_ROUTER,
-            routerSell: UNIV3_ROUTER,
-            tokenMid: WETH,
-            feeBuy: 500,
-            feeSell: 3000,
-            minProfit: 1
+            routerBuy: UNIV3_ROUTER, routerSell: UNIV3_ROUTER, tokenMid: WETH, feeBuy: 500, feeSell: 3000, minProfit: 1
         });
 
         vm.prank(address(0xBEEF));
