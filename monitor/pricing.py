@@ -27,9 +27,10 @@ ALGEBRA_POOL_ABI = [
         "outputs": [
             {"type": "uint160", "name": "price"},
             {"type": "int24", "name": "tick"},
-            {"type": "uint16", "name": "lastFee"},
-            {"type": "uint8", "name": "pluginConfig"},
-            {"type": "uint16", "name": "communityFee"},
+            {"type": "uint16", "name": "fee"},
+            {"type": "uint16", "name": "timepointIndex"},
+            {"type": "uint8", "name": "communityFeeToken0"},
+            {"type": "uint8", "name": "communityFeeToken1"},
             {"type": "bool", "name": "unlocked"},
         ],
         "stateMutability": "view",

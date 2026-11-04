@@ -120,14 +120,12 @@ def alert(profit, amount):
 
 
 def main():
-    rpc_url = os.environ.get("POLYGON_RPC_URL")
-    if not rpc_url:
-        print("VIRHE: POLYGON_RPC_URL puuttuu.")
-        sys.exit(1)
+    from config import RPC_URL
 
+    rpc_url = RPC_URL
     w3 = Web3(Web3.HTTPProvider(rpc_url))
     if not w3.is_connected():
-        print("VIRHE: Ei yhteytta RPC:hen.")
+        print(f"VIRHE: Ei yhteytta RPC:hen osoitteessa {rpc_url}.")
         sys.exit(1)
 
     quoter = w3.eth.contract(address=QUOTER_V2, abi=QUOTER_ABI)

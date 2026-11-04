@@ -91,16 +91,14 @@ def get_quote(quoter, token_in, token_out, amount_in, fee):
 
 
 def main():
-    rpc_url = os.environ.get("POLYGON_RPC_URL")
-    if not rpc_url:
-        print("VIRHE: POLYGON_RPC_URL ymparistomuuttuja puuttuu.")
-        print("Aseta se: export POLYGON_RPC_URL=https://polygon-mainnet.g.alchemy.com/v2/AVAIN")
-        sys.exit(1)
+    from config import RPC_URL
 
+    rpc_url = RPC_URL
     w3 = Web3(Web3.HTTPProvider(rpc_url))
     if not w3.is_connected():
-        print("VIRHE: Ei yhteytta RPC:hen. Tarkista POLYGON_RPC_URL.")
+        print(f"VIRHE: Ei yhteytta RPC:hen osoitteessa {rpc_url}.")
         sys.exit(1)
+
 
     print(f"Yhdistetty Polygoniin. Lohko: {w3.eth.block_number}")
     print(f"Reitti: USDC --({FEE_BUY/10000:.2f}%)--> WETH --({FEE_SELL/10000:.2f}%)--> USDC")

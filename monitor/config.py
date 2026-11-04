@@ -1,10 +1,17 @@
-from os import getenv
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Etsi ja lataa projektin juuresta mahdollinen .env-tiedosto
+env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 # ------------------------------------------------------------------
 # RPC
 # ------------------------------------------------------------------
 
-RPC_URL = getenv("POLYGON_RPC_URL")
+# Ensisijaisesti .env / ymparistomuuttuja, toissijaisesti julkinen RPC
+RPC_URL = os.getenv("POLYGON_RPC_URL", "https://polygon-bor-rpc.publicnode.com")
 
 # ------------------------------------------------------------------
 # Polygon tokenit
@@ -28,9 +35,9 @@ DEX = {
 
     "UNISWAP_V3_QUOTER": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
 
-    "QUICKSWAP_V3_QUOTER":
-        "0xa15F0d7377B2A0C0c10db057f641bed21028FC89",
+    "QUICKSWAP_V3_QUOTER": "0xa15F0d7377B2A0C0c10db057f641bed21028FC89",
 }
+
 # ------------------------------------------------------------------
 # Fee tierit
 # ------------------------------------------------------------------
@@ -47,4 +54,4 @@ FEE_TIERS = [
 # ------------------------------------------------------------------
 
 CHECK_INTERVAL = 10      # sekuntia
-MIN_PROFIT_USDC = 1.0    # hälytysraja
+MIN_PROFIT_USDC = 1.0    # halytysraja
