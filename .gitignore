@@ -24,3 +24,8 @@ docs/
 # Oma lisays: pidetaan kaikki broadcast-lokit poissa gitista
 /broadcast/
 bin/
+
+# Python virtuaaliymparisto ja valimuistit
+.venv/
+**/__pycache__/
+*.pyc

@@ -17,31 +17,44 @@ quoter = w3.eth.contract(
 def quote_exact_input_single(
     token_in,
     token_out,
-    fee,
     amount_in,
+    fee=500,
 ):
     params = (
         Web3.to_checksum_address(token_in),
         Web3.to_checksum_address(token_out),
-        fee,
         amount_in,
+        fee,
         0,
     )
 
-    return quoter.functions.quoteExactInputSingle(
-        params
-    ).call()
+    amount_out, sqrt_after, ticks_crossed, gas_estimate = (
+        quoter.functions.quoteExactInputSingle(params).call()
+    )
+
+    return {
+        "amount_out": amount_out,
+        "sqrt_price_after": sqrt_after,
+        "ticks_crossed": ticks_crossed,
+        "gas_estimate": gas_estimate,
+    }
 
 
 if __name__ == "__main__":
 
     from config import TOKENS
 
-    result = quote_exact_input_single(
+    amount_in = 1_000_000  # 1 USDC (6 decimals)
+
+    quote = quote_exact_input_single(
         TOKENS["USDC"],
         TOKENS["WMATIC"],
+        amount_in,
         500,
-        1_000_000,
     )
 
-    print(result)
+    print("\nQuote")
+    print(f"Input : {amount_in} USDC units")
+    print(f"Output: {quote['amount_out']}")
+    print(f"Ticks : {quote['ticks_crossed']}")
+    print(f"Gas   : {quote['gas_estimate']}")
