@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 compare_dex.py - Jatkuva moniparin DEX-vertailuluuppi, likviditeettisuodatus ja Quoter-simulaattori (Polygon).
-Tarkistaa uudet lohkot, suodattaa kuivuneet altaat ja ajaa Quoter-slippagesimulaation vain riittävällä likviditeetillä.
+Tarkistaa uudet lohkot, suodattaa kuivuneet altaat ja ajaa Quoter-slippagesimulaation vain riittävällä nettoedutuksella.
 """
 
 import sys
@@ -16,7 +16,6 @@ from quickswap_quoter import quote_exact_input_single_quick
 from uniswap import get_uniswap_pool
 from uniswap_quoter import quote_exact_input_single
 
-# Yksinkertainen ABI aktiivisen likviditeetin lukemiseen
 LIQUIDITY_ABI = [
     {
         "inputs": [],
@@ -27,29 +26,40 @@ LIQUIDITY_ABI = [
     }
 ]
 
+# Varmistetaan USDT:n osoite jos se puuttuu configista
+if "USDT" not in TOKENS:
+    TOKENS["USDT"] = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
+
 DECIMALS = {
     "USDC": 6,
+    "USDT": 6,
     "WBTC": 8,
     "WETH": 18,
     "WMATIC": 18,
     "LINK": 18,
 }
 
+# Seurattavat parit: (Base, Quote, Uniswap fee)
+# Uniswap V3:
+#   - USDT/USDC stabiilipari: 100 (0.01%) tai 500 (0.05%) -> 100 on likvidein
+#   - WETH/WMATIC: 500 (0.05%)
 PAIRS_TO_CHECK = [
     ("WMATIC", "USDC", 500),   # 0.05% Uni
     ("WETH", "USDC", 500),     # 0.05% Uni
     ("WBTC", "USDC", 500),     # 0.05% Uni
     ("LINK", "USDC", 3000),    # 0.30% Uni
+    ("WETH", "WMATIC", 500),   # 0.05% Uni
+    ("USDT", "USDC", 100),     # 0.01% Uni
 ]
 
-TEST_LOAN_AMOUNTS = [50, 150, 500]
+# Simuloitavat lainamäärät quote-tokenin nimellisyksiköissä (esim. 50, 250, 1000 USDC tai WMATIC)
+TEST_LOAN_AMOUNTS = [50, 250, 1000]
 
-# Minimilikviditeetti (L): kuivuneissa altaissa L on usein 0 tai mitätön (esim. < 100 000)
 MIN_LIQUIDITY_THRESHOLD = 100_000
+MIN_NET_EDGE_PCT = 0.05  # Vaaditaan vähintään +0.05% puhdas spottiylijäämä kulujen jälkeen
 
 
 def get_pool_liquidity(pool_address: str) -> int:
-    """Lukee altaan tämänhetkisen aktiivisen likviditeetin (uint128)."""
     try:
         c = w3.eth.contract(
             address=Web3.to_checksum_address(pool_address),
@@ -66,6 +76,10 @@ def init_pools():
 
     print("Alustetaan altaat...")
     for base_sym, quote_sym, uni_fee in PAIRS_TO_CHECK:
+        if base_sym not in TOKENS or quote_sym not in TOKENS:
+            print(f"[{base_sym}/{quote_sym}] Token-osoite puuttuu TOKENS-määrityksestä, ohitetaan.")
+            continue
+
         base_addr = TOKENS[base_sym]
         quote_addr = TOKENS[quote_sym]
 
@@ -86,7 +100,7 @@ def init_pools():
             continue
 
         if uni_pool == zero_addr or quick_pool == zero_addr:
-            print(f"[{base_sym}/{quote_sym}] Allas puuttuu, ohitetaan.")
+            print(f"[{base_sym}/{quote_sym}] Allas puuttuu toisesta pörssistä (Uni: {uni_pool}, Quick: {quick_pool}), ohitetaan.")
             continue
 
         pools.append({
@@ -94,6 +108,8 @@ def init_pools():
             "quote_sym": quote_sym,
             "base_addr": base_addr,
             "quote_addr": quote_addr,
+            "dec_base": DECIMALS[base_sym],
+            "dec_quote": DECIMALS[quote_sym],
             "uni_fee": uni_fee,
             "uni_fee_pct": uni_fee / 10_000,
             "uni_pool": uni_pool,
@@ -108,39 +124,46 @@ def init_pools():
 
 
 def run_quoter_simulation(p: dict, direction: str):
-    usdc_addr = p["quote_addr"]
-    token_addr = p["base_addr"]
+    quote_addr = p["quote_addr"]
+    base_addr = p["base_addr"]
     uni_fee = p["uni_fee"]
+    quote_sym = p["quote_sym"]
+    dec_quote = p["dec_quote"]
 
-    print("\n  [QUOTER-SIMULAATIO (Toteutuva tuotto / Slippage)]")
+    print(f"\n  [QUOTER-SIMULAATIO (Toteutuva tuotto / Slippage | Lainavaluutta: {quote_sym})]")
 
     for amt in TEST_LOAN_AMOUNTS:
-        raw_in = amt * 10**6
+        raw_in = int(amt * (10**dec_quote))
         try:
             if direction == "UNI_TO_QUICK":
-                q1 = quote_exact_input_single(usdc_addr, token_addr, raw_in, uni_fee)
+                # 1. Uni: Quote -> Base
+                q1 = quote_exact_input_single(quote_addr, base_addr, raw_in, uni_fee)
                 token_out = q1["amount_out"]
-                q2 = quote_exact_input_single_quick(token_addr, usdc_addr, token_out)
-                usdc_out = q2["amount_out"]
+                # 2. Quick: Base -> Quote
+                q2 = quote_exact_input_single_quick(base_addr, quote_addr, token_out)
+                quote_out = q2["amount_out"]
             else:
-                q1 = quote_exact_input_single_quick(usdc_addr, token_addr, raw_in)
+                # 1. Quick: Quote -> Base
+                q1 = quote_exact_input_single_quick(quote_addr, base_addr, raw_in)
                 token_out = q1["amount_out"]
-                q2 = quote_exact_input_single(token_addr, usdc_addr, token_out, uni_fee)
-                usdc_out = q2["amount_out"]
+                # 2. Uni: Base -> Quote
+                q2 = quote_exact_input_single(base_addr, quote_addr, token_out, uni_fee)
+                quote_out = q2["amount_out"]
 
+            # Aaven 0.05% lainapreemio
             owed = raw_in + (raw_in * 5) // 10000
-            net_profit_usdc = (usdc_out - owed) / 10**6
-            pct_return = (net_profit_usdc / amt) * 100
+            net_profit = (quote_out - owed) / (10**dec_quote)
+            pct_return = (net_profit / amt) * 100
 
-            status = "VOITOLLINEN!" if net_profit_usdc > 0 else "Tappio (slippage)"
+            status = "VOITOLLINEN!" if net_profit > 0 else "Tappio (slippage)"
             print(
-                f"    Laina: {amt:>4} USDC | "
-                f"Palautus: {usdc_out / 10**6:>8.3f} USDC | "
-                f"Netto: {net_profit_usdc:>+7.3f} USDC ({pct_return:>+6.2f}%) | "
+                f"    Laina: {amt:>5} {quote_sym} | "
+                f"Palautus: {quote_out / (10**dec_quote):>10.3f} {quote_sym} | "
+                f"Netto: {net_profit:>+8.3f} {quote_sym} ({pct_return:>+6.2f}%) | "
                 f"{status}"
             )
         except Exception as e:
-            print(f"    Laina: {amt:>4} USDC | Simulaatiovirhe: {e}")
+            print(f"    Laina: {amt:>5} {quote_sym} | Simulaatiovirhe: {e}")
 
 
 def scan_block(block_number: int, pools: list) -> int:
@@ -165,35 +188,31 @@ def scan_block(block_number: int, pools: list) -> int:
         abs_pct = abs(pct_diff)
 
         total_fee_estimate = p["uni_fee_pct"] + quick_fee_pct + 0.05
+        net_edge = abs_pct - total_fee_estimate
 
-        if abs_pct > total_fee_estimate:
-            # Tarkistetaan molempien altaiden aktiivinen likviditeetti
+        if net_edge >= MIN_NET_EDGE_PCT:
             uni_liq = get_pool_liquidity(p["uni_pool"])
             quick_liq = get_pool_liquidity(p["quick_pool"])
 
-            if price_uni < price_quick:
-                dir_label = "Osta Uniswap -> Myy Quickswap"
-                direction = "UNI_TO_QUICK"
-            else:
-                dir_label = "Osta Quickswap -> Myy Uniswap"
-                direction = "QUICK_TO_UNI"
-
-            net_edge = abs_pct - total_fee_estimate
-
-            # Jos jommassakummassa altaassa ei ole riittävää likviditeettiä, ohitetaan Quoter
             if uni_liq < MIN_LIQUIDITY_THRESHOLD or quick_liq < MIN_LIQUIDITY_THRESHOLD:
-                # Tulostetaan vain kompakti huomio eikä ammuta raskaampaa Quoter-kutsua
                 continue
 
             alerts += 1
+            if price_uni < price_quick:
+                dir_label = f"Osta Uniswap -> Myy Quickswap"
+                direction = "UNI_TO_QUICK"
+            else:
+                dir_label = f"Osta Quickswap -> Myy Uniswap"
+                direction = "QUICK_TO_UNI"
+
             print(f"\n{'!'*65}")
             print(f"[LOHKO {block_number}] SPOTTI-HALYTYS: {p['base_sym']}/{p['quote_sym']}")
             print(f"  Suunta:           {dir_label}")
-            print(f"  Uniswap ({p['uni_fee_pct']:.2f}%):  {price_uni:.4f} {p['quote_sym']} (Liq: {uni_liq})")
-            print(f"  Quickswap ({quick_fee_pct:.4f}%): {price_quick:.4f} {p['quote_sym']} (Liq: {quick_liq})")
+            print(f"  Uniswap ({p['uni_fee_pct']:.2f}%):  {price_uni:.6f} {p['quote_sym']} (Liq: {uni_liq})")
+            print(f"  Quickswap ({quick_fee_pct:.4f}%): {price_quick:.6f} {p['quote_sym']} (Liq: {quick_liq})")
             print(f"  Bruttoero:        {abs_pct:.4f} %")
             print(f"  Arvioidut kulut:  {total_fee_estimate:.4f} %")
-            print(f"  Nettoedutus:      +{net_edge:.4f} %")
+            print(f"  Nettoedutus:      +{net_edge:.4f} % (Kynnys: >={MIN_NET_EDGE_PCT:.2f}%)")
 
             run_quoter_simulation(p, direction)
             print(f"{'!'*65}\n")
@@ -207,7 +226,7 @@ def main():
         print("Ei seurattavia altaita. Lopetetaan.")
         sys.exit(1)
 
-    print("Kaynnistetaan lohkoseuranta + Liquidity Filter + Quoter (lopeta: Ctrl+C)...")
+    print(f"Kaynnistetaan seuranta (Min edge: {MIN_NET_EDGE_PCT}%, Min liq: {MIN_LIQUIDITY_THRESHOLD})...")
     last_checked_block = 0
 
     try:
@@ -236,4 +255,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
